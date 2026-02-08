@@ -1,17 +1,37 @@
+//==============================================================================
+// Module: alu
+// Description: 64-bit Arithmetic Logic Unit with Zba extension support
+//
+// Supported Operations:
+//   RV64I Base: ADD, SUB, AND, OR, XOR, SLL, SRL, SRA, SLT, SLTU
+//   RV64I Word: ADDW, SUBW, SLLW, SRLW, SRAW (32-bit with sign-extension)
+//   Zba Extension: SH1ADD, SH2ADD, SH3ADD (shift-and-add for array indexing)
+//                  ADD.UW, SLLI.UW (unsigned word operations)
+//                  SH1ADD.UW, SH2ADD.UW, SH3ADD.UW
+//
+// Zba Instructions Usage:
+//   SH1ADD: Array indexing for 16-bit elements (addr = base + index*2)
+//   SH2ADD: Array indexing for 32-bit elements (addr = base + index*4)
+//   SH3ADD: Array indexing for 64-bit elements (addr = base + index*8)
+//==============================================================================
 module alu
     import riscv_pkg::*;
 (
-    input  logic [63:0] operand_a,
-    input  logic [63:0] operand_b,
-    input  alu_op_t     alu_op,
-    output logic [63:0] result
+    input  logic [63:0] operand_a,  // First operand (typically rs1)
+    input  logic [63:0] operand_b,  // Second operand (rs2 or immediate)
+    input  alu_op_t     alu_op,     // Operation select
+    output logic [63:0] result      // Computation result
 );
 
     logic [63:0] add_result;
     logic [63:0] sub_result;
-    logic [31:0] word_result;
-    logic [63:0] shift_amount;
+    logic [5:0]  shift_amount;
     logic [4:0]  shift_amount_w;
+    logic [63:0] sra_result;
+    logic [31:0] sraw_result;
+
+    assign sra_result = $unsigned($signed(operand_a) >>> shift_amount);
+    assign sraw_result = $unsigned($signed(operand_a[31:0]) >>> shift_amount_w);
 
     assign add_result = operand_a + operand_b;
     assign sub_result = operand_a - operand_b;
@@ -32,32 +52,17 @@ module alu
             ALU_SLTU:    result = (operand_a < operand_b) ? 64'd1 : 64'd0;
             ALU_XOR:     result = operand_a ^ operand_b;
             ALU_SRL:     result = operand_a >> shift_amount;
-            ALU_SRA:     result = $signed(operand_a) >>> shift_amount;
+            ALU_SRA:     result = sra_result;
             ALU_OR:      result = operand_a | operand_b;
             ALU_AND:     result = operand_a & operand_b;
             ALU_PASS_B:  result = operand_b;
 
             // RV64I word operations (32-bit with sign extension)
-            ALU_ADDW: begin
-                word_result = operand_a[31:0] + operand_b[31:0];
-                result = sext_w(word_result);
-            end
-            ALU_SUBW: begin
-                word_result = operand_a[31:0] - operand_b[31:0];
-                result = sext_w(word_result);
-            end
-            ALU_SLLW: begin
-                word_result = operand_a[31:0] << shift_amount_w;
-                result = sext_w(word_result);
-            end
-            ALU_SRLW: begin
-                word_result = operand_a[31:0] >> shift_amount_w;
-                result = sext_w(word_result);
-            end
-            ALU_SRAW: begin
-                word_result = $signed(operand_a[31:0]) >>> shift_amount_w;
-                result = sext_w(word_result);
-            end
+            ALU_ADDW:    result = sext_w(operand_a[31:0] + operand_b[31:0]);
+            ALU_SUBW:    result = sext_w(operand_a[31:0] - operand_b[31:0]);
+            ALU_SLLW:    result = sext_w(operand_a[31:0] << shift_amount_w);
+            ALU_SRLW:    result = sext_w(operand_a[31:0] >> shift_amount_w);
+            ALU_SRAW:    result = sext_w(sraw_result);
 
             // Zba extension: shift-and-add
             ALU_SH1ADD:  result = operand_b + (operand_a << 1);

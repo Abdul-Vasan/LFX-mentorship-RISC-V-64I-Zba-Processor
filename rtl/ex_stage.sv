@@ -1,14 +1,23 @@
+//==============================================================================
+// Module: ex_stage
+// Description: Execute stage - ALU operations and branch evaluation
+//
+// Functions:
+//   - ALU operand selection (register, PC, immediate, constant)
+//   - ALU computation (arithmetic, logic, shifts, Zba operations)
+//   - Branch target calculation (PC + immediate)
+//   - JALR target calculation (rs1 + immediate)
+//   - Branch condition evaluation (BEQ, BNE, BLT, BGE, BLTU, BGEU)
+//==============================================================================
 module ex_stage
     import riscv_pkg::*;
 (
-    // From ID/EX register
-    input  id_ex_reg_t  id_ex_reg,
-    // Outputs
-    output logic [63:0] alu_result,
-    output logic [63:0] branch_target,
-    output logic [63:0] jalr_target,
-    output logic        branch_taken,
-    output logic        jump
+    input  id_ex_reg_t  id_ex_reg,     // Pipeline register from ID stage
+    output logic [63:0] alu_result,    // ALU computation result
+    output logic [63:0] branch_target, // Branch destination (PC + imm)
+    output logic [63:0] jalr_target,   // JALR destination (rs1 + imm)
+    output logic        branch_taken,  // Branch condition met
+    output logic        jump           // JAL/JALR instruction
 );
 
     logic [63:0] operand_a;

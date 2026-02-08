@@ -1,19 +1,38 @@
+//==============================================================================
+// Module: processor_top
+// Description: Top-level module for RV64I+Zba 5-stage pipelined processor
+//
+// Architecture:
+//   - 5-stage pipeline: IF (Fetch), ID (Decode), EX (Execute), MEM (Memory), WB (Writeback)
+//   - Stall-only hazard handling (no forwarding)
+//   - Supports RV64I base integer instruction set
+//   - Supports Zba (address generation) extension
+//
+// Interfaces:
+//   - Separate instruction and data memory interfaces
+//   - Active-low asynchronous reset
+//   - ECALL detection for simulation termination
+//==============================================================================
 module processor_top
     import riscv_pkg::*;
 (
-    input  logic        clk,
-    input  logic        rst_n,
-    // Instruction memory interface
-    output logic [63:0] imem_addr,
-    input  logic [31:0] imem_rdata,
-    // Data memory interface
-    output logic [63:0] dmem_addr,
-    output logic [63:0] dmem_wdata,
-    output logic [7:0]  dmem_byte_en,
-    output logic        dmem_wen,
-    input  logic [63:0] dmem_rdata,
-    // Status
-    output logic        ecall_o
+    // Clock and Reset
+    input  logic        clk,          // System clock
+    input  logic        rst_n,        // Active-low asynchronous reset
+
+    // Instruction Memory Interface (Read-Only)
+    output logic [63:0] imem_addr,    // Instruction fetch address (PC)
+    input  logic [31:0] imem_rdata,   // Fetched instruction
+
+    // Data Memory Interface (Read/Write)
+    output logic [63:0] dmem_addr,    // Memory access address
+    output logic [63:0] dmem_wdata,   // Data to write
+    output logic [7:0]  dmem_byte_en, // Byte enable for partial writes
+    output logic        dmem_wen,     // Write enable (1=write, 0=read)
+    input  logic [63:0] dmem_rdata,   // Data read from memory
+
+    // Status Output
+    output logic        ecall_o       // ECALL instruction detected
 );
 
     // IF stage signals
@@ -122,7 +141,6 @@ module processor_top
         .rs2_addr_id   (id_rs2_addr),
         .rd_addr_ex    (id_ex_reg.rd_addr),
         .reg_write_ex  (id_ex_reg.ctrl.reg_write),
-        .mem_read_ex   (id_ex_reg.ctrl.mem_read),
         .valid_ex      (id_ex_reg.valid),
         .rd_addr_mem   (ex_mem_reg.rd_addr),
         .reg_write_mem (ex_mem_reg.reg_write),

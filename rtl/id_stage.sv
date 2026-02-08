@@ -21,9 +21,7 @@ module id_stage
     output logic        ecall
 );
 
-    logic [6:0]   funct7;
     imm_type_t    imm_type;
-    logic         illegal_instr;
 
     // Decoder
     decoder u_decoder (
@@ -32,10 +30,10 @@ module id_stage
         .rs2_addr      (rs2_addr),
         .rd_addr       (rd_addr),
         .funct3        (funct3),
-        .funct7        (funct7),
+        .funct7        (),
         .imm_type      (imm_type),
         .ctrl          (ctrl),
-        .illegal_instr (illegal_instr),
+        .illegal_instr (),
         .ecall         (ecall)
     );
 

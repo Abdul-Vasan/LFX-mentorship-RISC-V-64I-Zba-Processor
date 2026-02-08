@@ -1,17 +1,30 @@
-module register_file
-    import riscv_pkg::*;
-(
-    input  logic        clk,
-    input  logic        rst_n,
-    // Read ports
-    input  logic [4:0]  rs1_addr,
-    input  logic [4:0]  rs2_addr,
-    output logic [63:0] rs1_data,
-    output logic [63:0] rs2_data,
-    // Write port
-    input  logic [4:0]  rd_addr,
-    input  logic [63:0] rd_data,
-    input  logic        rd_wen
+//==============================================================================
+// Module: register_file
+// Description: 32x64-bit RISC-V integer register file
+//
+// Features:
+//   - 32 general-purpose 64-bit registers (x0-x31)
+//   - x0 is hardwired to zero (reads always return 0, writes ignored)
+//   - 2 combinational read ports (rs1, rs2)
+//   - 1 synchronous write port (rd)
+//   - Asynchronous active-low reset clears all registers
+//==============================================================================
+module register_file (
+    input  logic        clk,       // System clock
+    input  logic        rst_n,     // Active-low asynchronous reset
+
+    // Read port 1 (combinational)
+    input  logic [4:0]  rs1_addr,  // Source register 1 address
+    output logic [63:0] rs1_data,  // Source register 1 data
+
+    // Read port 2 (combinational)
+    input  logic [4:0]  rs2_addr,  // Source register 2 address
+    output logic [63:0] rs2_data,  // Source register 2 data
+
+    // Write port (synchronous, active on rising clock edge)
+    input  logic [4:0]  rd_addr,   // Destination register address
+    input  logic [63:0] rd_data,   // Data to write
+    input  logic        rd_wen     // Write enable
 );
 
     logic [63:0] registers [1:31];

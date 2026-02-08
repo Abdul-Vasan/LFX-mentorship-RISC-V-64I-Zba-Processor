@@ -1,9 +1,20 @@
+//==============================================================================
+// Module: immediate_gen
+// Description: Immediate value generator for RISC-V instructions
+//
+// Extracts and sign-extends immediate values based on instruction format:
+//   I-type: 12-bit signed immediate (arithmetic, loads, JALR)
+//   S-type: 12-bit signed immediate (stores)
+//   B-type: 13-bit signed immediate, LSB=0 (branches)
+//   U-type: 20-bit upper immediate (LUI, AUIPC)
+//   J-type: 21-bit signed immediate, LSB=0 (JAL)
+//==============================================================================
 module immediate_gen
     import riscv_pkg::*;
 (
-    input  logic [31:0] instr,
-    input  imm_type_t   imm_type,
-    output logic [63:0] imm
+    input  logic [31:0] instr,     // 32-bit instruction
+    input  imm_type_t   imm_type,  // Immediate format selector
+    output logic [63:0] imm        // Sign-extended 64-bit immediate
 );
 
     logic [63:0] imm_i, imm_s, imm_b, imm_u, imm_j;

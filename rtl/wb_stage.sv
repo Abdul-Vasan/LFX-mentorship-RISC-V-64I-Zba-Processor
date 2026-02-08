@@ -1,12 +1,19 @@
+//==============================================================================
+// Module: wb_stage
+// Description: Writeback stage - register file write data selection
+//
+// Functions:
+//   - Select between ALU result and memory load data
+//   - Generate register file write control signals
+//   - Prevent writes to x0 (handled by register file)
+//==============================================================================
 module wb_stage
     import riscv_pkg::*;
 (
-    // From MEM/WB register
-    input  mem_wb_reg_t mem_wb_reg,
-    // Outputs to register file
-    output logic [4:0]  rd_addr,
-    output logic [63:0] rd_data,
-    output logic        rd_wen
+    input  mem_wb_reg_t mem_wb_reg,  // Pipeline register from MEM stage
+    output logic [4:0]  rd_addr,     // Destination register address
+    output logic [63:0] rd_data,     // Data to write
+    output logic        rd_wen       // Write enable
 );
 
     // Writeback data selection

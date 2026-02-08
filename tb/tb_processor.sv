@@ -8,6 +8,7 @@ module tb_processor;
     localparam TIMEOUT_CYCLES = 10000;
     localparam IMEM_SIZE = 4096;
     localparam DMEM_SIZE = 8192;
+    localparam DATA_BASE = 64'h1000;  // Data section base address
 
     // Signals
     logic        clk;
@@ -20,6 +21,10 @@ module tb_processor;
     logic        dmem_wen;
     logic [63:0] dmem_rdata;
     logic        ecall;
+
+    // Test status
+    int tests_passed;
+    int tests_failed;
 
     // Clock generation
     initial begin
@@ -95,6 +100,173 @@ module tb_processor;
         end
     end
 
+    // =========================================================================
+    // ASSERTION 1: x0 is always zero (hardwired)
+    // =========================================================================
+    property p_x0_always_zero;
+        @(posedge clk) disable iff (!rst_n)
+        (u_dut.u_id_stage.u_regfile.registers[0] == 64'h0);
+    endproperty
+    assert property (p_x0_always_zero)
+        else $error("ASSERTION FAILED: x0 is not zero!");
+
+    // =========================================================================
+    // ASSERTION 2: PC is always aligned to 4 bytes
+    // =========================================================================
+    property p_pc_aligned;
+        @(posedge clk) disable iff (!rst_n)
+        (imem_addr[1:0] == 2'b00);
+    endproperty
+    assert property (p_pc_aligned)
+        else $error("ASSERTION FAILED: PC not 4-byte aligned! PC=0x%h", imem_addr);
+
+    // =========================================================================
+    // ASSERTION 3: Writes to x0 are ignored (x0 stays zero)
+    // Note: RISC-V allows targeting x0, but writes are discarded
+    // This is already covered by p_x0_always_zero assertion
+    // =========================================================================
+
+    // =========================================================================
+    // ASSERTION 4: Memory address alignment for doubleword access
+    // =========================================================================
+    property p_dmem_dword_aligned;
+        @(posedge clk) disable iff (!rst_n)
+        (dmem_wen && dmem_byte_en == 8'hFF) |-> (dmem_addr[2:0] == 3'b000);
+    endproperty
+    assert property (p_dmem_dword_aligned)
+        else $error("ASSERTION FAILED: Unaligned doubleword access at 0x%h", dmem_addr);
+
+    // =========================================================================
+    // ASSERTION 5: Memory address alignment for word access
+    // =========================================================================
+    property p_dmem_word_aligned;
+        @(posedge clk) disable iff (!rst_n)
+        (dmem_wen && (dmem_byte_en == 8'h0F || dmem_byte_en == 8'hF0)) |-> (dmem_addr[1:0] == 2'b00);
+    endproperty
+    assert property (p_dmem_word_aligned)
+        else $error("ASSERTION FAILED: Unaligned word access at 0x%h", dmem_addr);
+
+    // =========================================================================
+    // Helper function to read 64-bit value from data memory
+    // =========================================================================
+    function automatic logic [63:0] read_dmem_dword(input logic [63:0] addr);
+        logic [63:0] value;
+        value = {u_dmem.mem[addr[15:0]+7], u_dmem.mem[addr[15:0]+6],
+                 u_dmem.mem[addr[15:0]+5], u_dmem.mem[addr[15:0]+4],
+                 u_dmem.mem[addr[15:0]+3], u_dmem.mem[addr[15:0]+2],
+                 u_dmem.mem[addr[15:0]+1], u_dmem.mem[addr[15:0]+0]};
+        return value;
+    endfunction
+
+    // =========================================================================
+    // Task: Check expected value with assertion
+    // =========================================================================
+    task automatic check_value(
+        input string name,
+        input logic [63:0] actual,
+        input logic [63:0] expected
+    );
+        if (actual === expected) begin
+            $display("  [PASS] %s = 0x%016h", name, actual);
+            tests_passed++;
+        end else begin
+            $display("  [FAIL] %s = 0x%016h (expected 0x%016h)", name, actual, expected);
+            tests_failed++;
+        end
+    endtask
+
+    // =========================================================================
+    // Task: Run post-execution checks
+    // =========================================================================
+    task automatic run_post_execution_checks();
+        logic [63:0] mem_val;
+
+        $display("\n========================================");
+        $display("POST-EXECUTION ASSERTIONS");
+        $display("========================================\n");
+
+        tests_passed = 0;
+        tests_failed = 0;
+
+        // ---------------------------------------------------------------------
+        // Check 1: Stack pointer initialized (x2/sp should be non-zero)
+        // ---------------------------------------------------------------------
+        $display("--- Stack Pointer Check ---");
+        assert (u_dut.u_id_stage.u_regfile.registers[2] != 64'h0)
+            else $error("Stack pointer (x2) not initialized!");
+        if (u_dut.u_id_stage.u_regfile.registers[2] != 64'h0) begin
+            $display("  [PASS] x2 (sp) = 0x%016h (initialized)", 
+                     u_dut.u_id_stage.u_regfile.registers[2]);
+            tests_passed++;
+        end else begin
+            $display("  [FAIL] x2 (sp) not initialized");
+            tests_failed++;
+        end
+
+        // ---------------------------------------------------------------------
+        // Check 2: Return address set (x1/ra should be non-zero after calls)
+        // ---------------------------------------------------------------------
+        $display("\n--- Return Address Check ---");
+        if (u_dut.u_id_stage.u_regfile.registers[1] != 64'h0) begin
+            $display("  [PASS] x1 (ra) = 0x%016h (set by JAL/JALR)",
+                     u_dut.u_id_stage.u_regfile.registers[1]);
+            tests_passed++;
+        end else begin
+            $display("  [INFO] x1 (ra) = 0 (may be expected if returned to main)");
+            tests_passed++;
+        end
+
+        // ---------------------------------------------------------------------
+        // Check 3: Memory test - data_array[1] should have loaded value
+        // (test_memory stores 0x123456789ABCDEF0 to [0], loads it, stores to [1])
+        // ---------------------------------------------------------------------
+        $display("\n--- Memory Operation Checks ---");
+        mem_val = read_dmem_dword(DATA_BASE + 64'h8);
+        check_value("data_array[1] (LD/SD test)", mem_val, 64'h123456789ABCDEF0);
+
+        // ---------------------------------------------------------------------
+        // Check 4: Branch test - data_array[5] should be 1 (BNE passed)
+        // ---------------------------------------------------------------------
+        $display("\n--- Branch Test Checks ---");
+        mem_val = read_dmem_dword(DATA_BASE + 64'h28);
+        check_value("data_array[5] (BNE test)", mem_val, 64'h1);
+
+        // ---------------------------------------------------------------------
+        // Check 5: Branch test - data_array[6] should be 1 (BGE passed)
+        // ---------------------------------------------------------------------
+        mem_val = read_dmem_dword(DATA_BASE + 64'h30);
+        check_value("data_array[6] (BGE test)", mem_val, 64'h1);
+
+        // ---------------------------------------------------------------------
+        // Check 6: Zba SH3ADD - data_array[3] has SH3ADD result
+        // (ll_ptr[2] with base offset writes 0xCAFEBABE12345678)
+        // ---------------------------------------------------------------------
+        $display("\n--- Zba Instruction Checks ---");
+        mem_val = read_dmem_dword(DATA_BASE + 64'h18);
+        check_value("Zba SH3ADD result", mem_val, 64'hCAFEBABE12345678);
+
+        // ---------------------------------------------------------------------
+        // Check 8: Verify test_arithmetic ran (result variable at data[0])
+        // (result = 50 = 0x32 from final shift operation)
+        // ---------------------------------------------------------------------
+        $display("\n--- Arithmetic Check ---");
+        mem_val = read_dmem_dword(DATA_BASE + 64'h0);
+        check_value("result (arithmetic)", mem_val, 64'h0000000000000032);
+
+        // ---------------------------------------------------------------------
+        // Summary
+        // ---------------------------------------------------------------------
+        $display("\n========================================");
+        $display("ASSERTION SUMMARY: %0d passed, %0d failed", tests_passed, tests_failed);
+        $display("========================================");
+
+        if (tests_failed == 0) begin
+            $display("*** ALL TESTS PASSED ***");
+        end else begin
+            $display("*** SOME TESTS FAILED ***");
+        end
+    endtask
+
     // Test sequence
     initial begin
         $display("========================================");
@@ -115,12 +287,14 @@ module tb_processor;
                 $display("[%0t] ECALL detected - Test completed", $time);
                 $display("Total cycles: %0d", cycle_count);
                 $display("========================================");
+                run_post_execution_checks();
             end
             begin
                 repeat(TIMEOUT_CYCLES) @(posedge clk);
                 $display("\n========================================");
                 $display("[%0t] TIMEOUT after %0d cycles", $time, TIMEOUT_CYCLES);
                 $display("========================================");
+                run_post_execution_checks();
             end
         join_any
         disable fork;

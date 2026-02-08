@@ -1,8 +1,19 @@
+//==============================================================================
+// Package: riscv_pkg
+// Description: Type definitions and constants for RV64I+Zba processor
+//
+// Contents:
+//   - ALU operation encodings (including Zba extension)
+//   - Control signal types
+//   - Pipeline register structures
+//   - RISC-V opcode and function code constants
+//   - Immediate format types
+//==============================================================================
 package riscv_pkg;
 
     // Data widths
-    localparam XLEN = 64;
-    localparam ILEN = 32;
+    localparam XLEN = 64;  // Register width (RV64)
+    localparam ILEN = 32;  // Instruction width
 
     // Forward typedefs for struct dependencies
     typedef enum logic [4:0] {

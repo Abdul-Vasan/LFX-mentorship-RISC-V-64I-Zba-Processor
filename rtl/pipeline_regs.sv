@@ -1,3 +1,19 @@
+//==============================================================================
+// Pipeline Registers for 5-Stage RISC-V Processor
+//
+// Contains four pipeline registers:
+//   IF/ID  - Instruction Fetch to Decode
+//   ID/EX  - Decode to Execute
+//   EX/MEM - Execute to Memory
+//   MEM/WB - Memory to Writeback
+//
+// Features:
+//   - Synchronous operation on rising clock edge
+//   - Asynchronous active-low reset
+//   - Stall support (IF/ID only)
+//   - Flush support (IF/ID, ID/EX)
+//==============================================================================
+
 module if_id_register
     import riscv_pkg::*;
 (

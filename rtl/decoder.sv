@@ -1,16 +1,35 @@
+//==============================================================================
+// Module: decoder
+// Description: Instruction decoder for RV64I base ISA + Zba extension
+//
+// Decodes 32-bit RISC-V instructions and generates control signals for:
+//   - ALU operation selection
+//   - Register file read/write control
+//   - Memory access control (load/store)
+//   - Branch and jump control
+//   - Immediate type selection
+//
+// Supported Instruction Types:
+//   R-type: Register-register operations (ADD, SUB, AND, OR, XOR, shifts, Zba)
+//   I-type: Immediate operations, loads, JALR
+//   S-type: Store instructions
+//   B-type: Conditional branches
+//   U-type: LUI, AUIPC
+//   J-type: JAL
+//==============================================================================
 module decoder
     import riscv_pkg::*;
 (
-    input  logic [31:0] instr,
-    output logic [4:0]  rs1_addr,
-    output logic [4:0]  rs2_addr,
-    output logic [4:0]  rd_addr,
-    output logic [2:0]  funct3,
-    output logic [6:0]  funct7,
-    output imm_type_t   imm_type,
-    output ctrl_t       ctrl,
-    output logic        illegal_instr,
-    output logic        ecall
+    input  logic [31:0] instr,         // 32-bit instruction to decode
+    output logic [4:0]  rs1_addr,      // Source register 1 address
+    output logic [4:0]  rs2_addr,      // Source register 2 address
+    output logic [4:0]  rd_addr,       // Destination register address
+    output logic [2:0]  funct3,        // Function code (operation variant)
+    output logic [6:0]  funct7,        // Extended function code
+    output imm_type_t   imm_type,      // Immediate format type
+    output ctrl_t       ctrl,          // Control signals for datapath
+    output logic        illegal_instr, // Invalid instruction flag
+    output logic        ecall          // ECALL instruction detected
 );
 
     logic [6:0] opcode;
