@@ -1,0 +1,109 @@
+================================================================================
+RISC-V Toolchain Build Commands
+================================================================================
+
+PREREQUISITES:
+--------------
+Install the RISC-V GNU toolchain. On Ubuntu/Debian:
+
+    sudo apt-get install gcc-riscv64-unknown-elf
+
+Or build from source:
+    https://github.com/riscv-collab/riscv-gnu-toolchain
+
+================================================================================
+BUILD STEPS:
+================================================================================
+
+1. COMPILE C TO ASSEMBLY
+------------------------
+Generate assembly from C code with Zba extension enabled:
+
+    riscv64-unknown-elf-gcc -S -O2 -march=rv64i_zba -mabi=lp64 \
+        -ffreestanding -nostdlib test.c -o test.s
+
+Options:
+    -S              : Output assembly
+    -O2             : Optimization level 2 (enables Zba instruction selection)
+    -march=rv64i_zba: Target RV64I with Zba extension
+    -mabi=lp64      : Use LP64 ABI (64-bit long and pointer)
+    -ffreestanding  : Freestanding environment (no OS)
+    -nostdlib       : Don't link standard library
+
+2. ASSEMBLE STARTUP CODE
+------------------------
+    riscv64-unknown-elf-as -march=rv64i_zba startup.s -o startup.o
+
+3. COMPILE AND ASSEMBLE TEST PROGRAM
+------------------------------------
+    riscv64-unknown-elf-gcc -c -O2 -march=rv64i_zba -mabi=lp64 \
+        -ffreestanding -nostdlib test.c -o test.o
+
+4. LINK TO ELF
+--------------
+    riscv64-unknown-elf-ld -T linker.ld startup.o test.o -o test.elf
+
+5. EXTRACT MACHINE CODE (HEX FORMAT)
+------------------------------------
+For simulation, extract instruction memory contents:
+
+    riscv64-unknown-elf-objcopy -O verilog --verilog-data-width=4 \
+        test.elf test.hex
+
+Or for binary format:
+
+    riscv64-unknown-elf-objcopy -O binary test.elf test.bin
+
+6. DISASSEMBLE FOR VERIFICATION
+-------------------------------
+    riscv64-unknown-elf-objdump -d test.elf > test.disasm
+
+View with Zba mnemonics:
+
+    riscv64-unknown-elf-objdump -d -M no-aliases test.elf > test.disasm
+
+================================================================================
+ONE-LINE BUILD (ALL STEPS):
+================================================================================
+
+    riscv64-unknown-elf-gcc -O2 -march=rv64i_zba -mabi=lp64 \
+        -ffreestanding -nostdlib -T linker.ld \
+        startup.s test.c -o test.elf && \
+    riscv64-unknown-elf-objcopy -O verilog --verilog-data-width=4 \
+        test.elf test.hex && \
+    riscv64-unknown-elf-objdump -d test.elf > test.disasm
+
+================================================================================
+CONVERTING HEX FOR SIMULATION:
+================================================================================
+
+The Verilog hex file format may need adjustment for $readmemh.
+Use this Python script to convert:
+
+    python3 -c "
+    import sys
+    with open('test.hex', 'r') as f:
+        lines = f.readlines()
+    with open('test_sim.hex', 'w') as f:
+        for line in lines:
+            line = line.strip()
+            if line.startswith('@'):
+                addr = int(line[1:], 16) // 4
+                f.write(f'@{addr:08X}\n')
+            elif line:
+                f.write(line + '\n')
+    "
+
+================================================================================
+EXAMPLE ZBA INSTRUCTIONS IN DISASSEMBLY:
+================================================================================
+
+Look for these instructions in test.disasm:
+
+    sh1add  rd, rs1, rs2    # rd = rs2 + (rs1 << 1)
+    sh2add  rd, rs1, rs2    # rd = rs2 + (rs1 << 2)
+    sh3add  rd, rs1, rs2    # rd = rs2 + (rs1 << 3)
+    add.uw  rd, rs1, rs2    # rd = rs2 + zext(rs1[31:0])
+    slli.uw rd, rs1, shamt  # rd = zext(rs1[31:0]) << shamt
+
+================================================================================
